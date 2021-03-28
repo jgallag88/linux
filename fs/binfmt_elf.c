@@ -1674,6 +1674,23 @@ static void fill_auxv_note(struct memelfnote *note, struct mm_struct *mm)
 	fill_note(note, "CORE", NT_AUXV, i * sizeof(elf_addr_t), auxv);
 }
 
+struct elf_args_info {
+	unsigned long arg_start;
+	unsigned long arg_end;
+	unsigned long env_start;
+	unsigned long env_end;
+};
+
+static void fill_args_note(struct memelfnote *note, struct elf_args_info *argsdata, struct mm_struct *mm)
+{
+	argsdata->arg_start = mm->arg_start;
+	argsdata->arg_end = mm->arg_end;
+	argsdata->env_start = mm->env_start;
+	argsdata->env_end = mm->env_end;
+	// What is the difference between CORE and LINUX?
+	fill_note(note, "CORE", NT_ARGS, sizeof(*argsdata), argsdata);
+}
+
 static void fill_siginfo_note(struct memelfnote *note, user_siginfo_t *csigdata,
 		const kernel_siginfo_t *siginfo)
 {
@@ -1789,9 +1806,11 @@ struct elf_note_info {
 	struct elf_thread_core_info *thread;
 	struct memelfnote psinfo;
 	struct memelfnote signote;
+	struct memelfnote args;
 	struct memelfnote auxv;
 	struct memelfnote files;
 	user_siginfo_t csigdata;
+	struct elf_args_info argsdata;
 	size_t size;
 	int thread_notes;
 };
@@ -1964,11 +1983,22 @@ static int fill_note_info(struct elfhdr *elf, int phdrs,
 	fill_auxv_note(&info->auxv, current->mm);
 	info->size += notesize(&info->auxv);
 
+	// If we are to copy some struct that is part of or referenced by the
+	// current struct_task, what compatibility does that impose on the
+	// referenced struct? Presumably it can't be changed after that? Is
+	// there anything indicating that for the other structs used above?
+	// TODO: do we have to worry about anything changing in mm while we are
+	// copying it?
+	// TODO should we add this not to kernel cores as well?
+	fill_args_note(&info->args, &info->argsdata, current->mm);
+	info->size += notesize(&info->args);
+
 	if (fill_files_note(&info->files) == 0)
 		info->size += notesize(&info->files);
 
 	return 1;
 }
+
 
 static size_t get_note_info_size(struct elf_note_info *info)
 {
@@ -1996,6 +2026,8 @@ static int write_note_info(struct elf_note_info *info,
 		if (first && !writenote(&info->signote, cprm))
 			return 0;
 		if (first && !writenote(&info->auxv, cprm))
+			return 0;
+		if (first && !writenote(&info->args, cprm))
 			return 0;
 		if (first && info->files.data &&
 				!writenote(&info->files, cprm))

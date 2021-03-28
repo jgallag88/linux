@@ -368,13 +368,16 @@ typedef struct elf64_shdr {
  * Notes used in ET_CORE. Architectures export some of the arch register sets
  * using the corresponding note types via the PTRACE_GETREGSET and
  * PTRACE_SETREGSET requests.
- * The note name for all these is "LINUX".
+ * The note name for all these is "LINUX". // TODO this doesn't seem to be the case
  */
 #define NT_PRSTATUS	1
 #define NT_PRFPREG	2
 #define NT_PRPSINFO	3
 #define NT_TASKSTRUCT	4
+// TODO what happened to 5? Is there something else that we need to take into
+// account when numbering these flags?
 #define NT_AUXV		6
+#define NT_ARGS		7
 /*
  * Note to userspace developers: size of NT_SIGINFO note may increase
  * in the future to accomodate more fields, don't assume it is fixed!
